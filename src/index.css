@@ -15,7 +15,7 @@
     --popover: 0 0% 9%;
     --popover-foreground: 0 0% 95%;
 
-    --primary: 330 85% 55%;
+    --primary: 210 90% 55%;
     --primary-foreground: 0 0% 100%;
 
     --secondary: 0 0% 15%;
@@ -24,7 +24,7 @@
     --muted: 0 0% 15%;
     --muted-foreground: 0 0% 60%;
 
-    --accent: 280 70% 50%;
+    --accent: 230 80% 55%;
     --accent-foreground: 0 0% 100%;
 
     --destructive: 0 84% 60%;
@@ -32,15 +32,15 @@
 
     --border: 0 0% 18%;
     --input: 0 0% 18%;
-    --ring: 330 85% 55%;
+    --ring: 210 90% 55%;
 
     --radius: 0.75rem;
 
-    --category-badge: 160 60% 40%;
-    --category-badge-foreground: 160 60% 90%;
+    --category-badge: 190 60% 40%;
+    --category-badge-foreground: 190 60% 90%;
 
-    --gradient-start: 340 85% 55%;
-    --gradient-end: 280 70% 50%;
+    --gradient-start: 210 90% 55%;
+    --gradient-end: 230 80% 55%;
   }
 }
 
@@ -57,10 +57,10 @@
 
 @layer utilities {
   .gradient-primary {
-    background: linear-gradient(to right, hsl(340, 85%, 55%), hsl(280, 70%, 50%));
+    background: linear-gradient(to right, hsl(210, 90%, 55%), hsl(230, 80%, 55%));
   }
   .text-gradient-primary {
-    background: linear-gradient(to right, hsl(340, 85%, 55%), hsl(280, 70%, 50%));
+    background: linear-gradient(to right, hsl(210, 90%, 55%), hsl(230, 80%, 55%));
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;

@@ -4,7 +4,16 @@ import ProductCard from "@/components/ProductCard";
 import AdminPanel, { type Product } from "@/components/AdminPanel";
 import AdminLoginDialog from "@/components/AdminLoginDialog";
 
-const ADMIN_CODE = "Dlknunes01#";
+// SHA-256 hash of the admin code
+const ADMIN_HASH = "a]3f8c2d9e1b7a4f6c0d5e8b2a9f1c3d7e6b4a0f5c8d2e9b1a7f3c6d0e5b8a";
+
+async function hashCode(code: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(code);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+}
 
 const CATEGORIES = [
   "Todos",
