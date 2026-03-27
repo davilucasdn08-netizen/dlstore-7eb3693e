@@ -178,6 +178,7 @@ const Index = () => {
         onClose={() => setShowAdminPanel(false)}
         products={products}
         onAddProduct={handleAddProduct}
+        onEditProduct={handleEditProduct}
         onDeleteProduct={handleDeleteProduct}
         onLogout={handleLogout}
       />
