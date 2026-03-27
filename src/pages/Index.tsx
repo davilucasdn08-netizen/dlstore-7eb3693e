@@ -4,7 +4,15 @@ import ProductCard from "@/components/ProductCard";
 import AdminPanel, { type Product } from "@/components/AdminPanel";
 import AdminLoginDialog from "@/components/AdminLoginDialog";
 
-const ADMIN_CODE = "Dlknunes01#";
+const ADMIN_HASH = "df4142c988f294e5274655671db7148f5d74dc8a8dc3d936074d57b35e51c0c2";
+
+async function hashCode(code: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(code);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+}
 
 const CATEGORIES = [
   "Todos",
@@ -63,8 +71,9 @@ const Index = () => {
     saveProducts(newProducts);
   };
 
-  const handleLogin = (code: string) => {
-    if (code === ADMIN_CODE) {
+  const handleLogin = async (code: string) => {
+    const hash = await hashCode(code);
+    if (hash === ADMIN_HASH) {
       setIsAdmin(true);
       setShowLogin(false);
       setShowAdminPanel(true);

@@ -4,7 +4,7 @@ import { Lock, X } from "lucide-react";
 interface AdminLoginDialogProps {
   isOpen: boolean;
   onClose: () => void;
-  onLogin: (code: string) => boolean;
+  onLogin: (code: string) => Promise<boolean>;
 }
 
 const AdminLoginDialog = ({ isOpen, onClose, onLogin }: AdminLoginDialogProps) => {
@@ -13,8 +13,8 @@ const AdminLoginDialog = ({ isOpen, onClose, onLogin }: AdminLoginDialogProps) =
 
   if (!isOpen) return null;
 
-  const handleSubmit = () => {
-    const success = onLogin(code);
+  const handleSubmit = async () => {
+    const success = await onLogin(code);
     if (!success) {
       setError(true);
       setTimeout(() => setError(false), 2000);
