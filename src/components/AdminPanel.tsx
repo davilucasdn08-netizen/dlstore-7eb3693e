@@ -1,5 +1,7 @@
 import { useState } from "react";
-import { X, LogOut, Plus, Trash2, BarChart3, Pencil, Check, XCircle } from "lucide-react";
+import { X, LogOut, Plus, Trash2, BarChart3, Pencil, Check, XCircle, Link, Loader2 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 export interface Product {
   id: string;
@@ -36,6 +38,8 @@ const AdminPanel = ({ isOpen, onClose, products, onAddProduct, onEditProduct, on
   const [affiliateLink, setAffiliateLink] = useState("");
   const [category, setCategory] = useState("");
   const [price, setPrice] = useState("");
+  const [extractUrl, setExtractUrl] = useState("");
+  const [isExtracting, setIsExtracting] = useState(false);
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
@@ -43,6 +47,39 @@ const AdminPanel = ({ isOpen, onClose, products, onAddProduct, onEditProduct, on
   const [editAffiliateLink, setEditAffiliateLink] = useState("");
   const [editCategory, setEditCategory] = useState("");
   const [editPrice, setEditPrice] = useState("");
+
+  const handleExtract = async () => {
+    if (!extractUrl.trim()) return;
+    setIsExtracting(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('extract-product', {
+        body: { url: extractUrl.trim() },
+      });
+
+      if (error) {
+        toast.error("Erro ao extrair dados do produto");
+        console.error(error);
+        return;
+      }
+
+      if (data?.success && data.data) {
+        const d = data.data;
+        if (d.name) setName(d.name);
+        if (d.imageUrl) setImageUrl(d.imageUrl);
+        if (d.price) setPrice(d.price);
+        if (d.category) setCategory(d.category);
+        setAffiliateLink(extractUrl.trim());
+        toast.success("Dados extraídos com sucesso!");
+      } else {
+        toast.error(data?.error || "Não foi possível extrair os dados");
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("Erro ao conectar com o servidor");
+    } finally {
+      setIsExtracting(false);
+    }
+  };
 
   const handleSubmit = () => {
     if (!name || !imageUrl || !affiliateLink || !category) return;
@@ -52,6 +89,7 @@ const AdminPanel = ({ isOpen, onClose, products, onAddProduct, onEditProduct, on
     setAffiliateLink("");
     setCategory("");
     setPrice("");
+    setExtractUrl("");
   };
 
   const startEdit = (product: Product) => {
@@ -89,6 +127,30 @@ const AdminPanel = ({ isOpen, onClose, products, onAddProduct, onEditProduct, on
           <div className="flex items-center gap-3">
             <button onClick={onLogout} className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors">
               <LogOut size={16} /> Sair
+            </button>
+          </div>
+        </div>
+
+        {/* URL Extraction */}
+        <div className="mb-4 p-3 rounded-lg border border-primary/30 bg-primary/5">
+          <label className="text-xs font-semibold uppercase tracking-wider text-primary flex items-center gap-1.5 mb-2">
+            <Link size={13} /> Adicionar por link
+          </label>
+          <div className="flex gap-2">
+            <input
+              type="url"
+              placeholder="Cole o link do produto..."
+              value={extractUrl}
+              onChange={(e) => setExtractUrl(e.target.value)}
+              className={`${inputClass} text-sm py-2 flex-1`}
+            />
+            <button
+              onClick={handleExtract}
+              disabled={isExtracting || !extractUrl.trim()}
+              className="px-3 py-2 rounded-lg gradient-primary text-primary-foreground text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center gap-1 shrink-0"
+            >
+              {isExtracting ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+              {isExtracting ? "..." : "Extrair"}
             </button>
           </div>
         </div>
