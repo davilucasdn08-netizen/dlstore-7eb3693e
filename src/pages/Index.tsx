@@ -1,8 +1,19 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { Search, Lock } from "lucide-react";
 import ProductCard from "@/components/ProductCard";
-import AdminPanel, { type Product } from "@/components/AdminPanel";
+import AdminPanel from "@/components/AdminPanel";
 import AdminLoginDialog from "@/components/AdminLoginDialog";
+import { supabase } from "@/integrations/supabase/client";
+
+export interface Product {
+  id: string;
+  name: string;
+  imageUrl: string;
+  affiliateLink: string;
+  category: string;
+  price: string;
+  clicks: number;
+}
 
 const ADMIN_HASH = "df4142c988f294e5274655671db7148f5d74dc8a8dc3d936074d57b35e51c0c2";
 
@@ -22,26 +33,37 @@ const CATEGORIES = [
   "Beleza e Cuidados Pessoais",
 ];
 
-function loadProducts(): Product[] {
-  try {
-    const data = localStorage.getItem("dlstore-products");
-    return data ? JSON.parse(data) : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveProducts(products: Product[]) {
-  localStorage.setItem("dlstore-products", JSON.stringify(products));
-}
-
 const Index = () => {
-  const [products, setProducts] = useState<Product[]>(loadProducts);
+  const [products, setProducts] = useState<Product[]>([]);
   const [search, setSearch] = useState("");
   const [activeCategory, setActiveCategory] = useState("Todos");
   const [isAdmin, setIsAdmin] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
   const [showAdminPanel, setShowAdminPanel] = useState(false);
+
+  const fetchProducts = useCallback(async () => {
+    const { data } = await supabase
+      .from("products")
+      .select("*")
+      .order("created_at", { ascending: false });
+    if (data) {
+      setProducts(
+        data.map((p) => ({
+          id: p.id,
+          name: p.name,
+          imageUrl: p.image_url,
+          affiliateLink: p.affiliate_link,
+          category: p.category,
+          price: p.price,
+          clicks: p.clicks,
+        }))
+      );
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchProducts();
+  }, [fetchProducts]);
 
   const filteredProducts = useMemo(() => {
     return products.filter((p) => {
@@ -51,32 +73,46 @@ const Index = () => {
     });
   }, [products, search, activeCategory]);
 
-  const handleAddProduct = (product: Omit<Product, "id" | "clicks">) => {
-    const newProducts = [...products, { ...product, id: crypto.randomUUID(), clicks: 0 }];
-    setProducts(newProducts);
-    saveProducts(newProducts);
+  const handleAddProduct = async (product: Omit<Product, "id" | "clicks">) => {
+    const { error } = await supabase.from("products").insert({
+      name: product.name,
+      image_url: product.imageUrl,
+      affiliate_link: product.affiliateLink,
+      category: product.category,
+      price: product.price,
+    });
+    if (!error) fetchProducts();
   };
 
-  const handleEditProduct = (id: string, updated: Omit<Product, "id" | "clicks">) => {
-    const newProducts = products.map((p) =>
-      p.id === id ? { ...p, ...updated } : p
+  const handleEditProduct = async (id: string, updated: Omit<Product, "id" | "clicks">) => {
+    const { error } = await supabase
+      .from("products")
+      .update({
+        name: updated.name,
+        image_url: updated.imageUrl,
+        affiliate_link: updated.affiliateLink,
+        category: updated.category,
+        price: updated.price,
+      })
+      .eq("id", id);
+    if (!error) fetchProducts();
+  };
+
+  const handleDeleteProduct = async (id: string) => {
+    const { error } = await supabase.from("products").delete().eq("id", id);
+    if (!error) fetchProducts();
+  };
+
+  const handleClickTrack = async (id: string) => {
+    const product = products.find((p) => p.id === id);
+    if (!product) return;
+    await supabase
+      .from("products")
+      .update({ clicks: product.clicks + 1 })
+      .eq("id", id);
+    setProducts((prev) =>
+      prev.map((p) => (p.id === id ? { ...p, clicks: p.clicks + 1 } : p))
     );
-    setProducts(newProducts);
-    saveProducts(newProducts);
-  };
-
-  const handleDeleteProduct = (id: string) => {
-    const newProducts = products.filter((p) => p.id !== id);
-    setProducts(newProducts);
-    saveProducts(newProducts);
-  };
-
-  const handleClickTrack = (id: string) => {
-    const newProducts = products.map((p) =>
-      p.id === id ? { ...p, clicks: p.clicks + 1 } : p
-    );
-    setProducts(newProducts);
-    saveProducts(newProducts);
   };
 
   const handleLogin = async (code: string) => {
@@ -97,7 +133,6 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
       <header className="pt-10 pb-6 text-center">
         <h1 className="text-5xl md:text-6xl font-black tracking-tight">
           <span className="text-gradient-primary">DL</span>
@@ -106,7 +141,6 @@ const Index = () => {
         <p className="text-muted-foreground mt-2 text-sm">Os melhores produtos selecionados para você</p>
       </header>
 
-      {/* Search */}
       <div className="max-w-xl mx-auto px-4 mb-6">
         <div className="relative">
           <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -120,7 +154,6 @@ const Index = () => {
         </div>
       </div>
 
-      {/* Categories */}
       <div className="flex flex-wrap justify-center gap-2 px-4 mb-10">
         {CATEGORIES.map((cat) => (
           <button
@@ -137,7 +170,6 @@ const Index = () => {
         ))}
       </div>
 
-      {/* Products Grid */}
       <main className="max-w-6xl mx-auto px-4 pb-20">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {filteredProducts.map((product) => (
@@ -157,7 +189,6 @@ const Index = () => {
         )}
       </main>
 
-      {/* Admin FAB */}
       <button
         onClick={() => (isAdmin ? setShowAdminPanel(!showAdminPanel) : setShowLogin(true))}
         className="fixed bottom-6 right-6 w-14 h-14 rounded-full gradient-primary text-primary-foreground flex items-center justify-center shadow-xl hover:opacity-90 transition-opacity z-[60]"
@@ -165,14 +196,12 @@ const Index = () => {
         <Lock size={22} />
       </button>
 
-      {/* Admin Login Dialog */}
       <AdminLoginDialog
         isOpen={showLogin}
         onClose={() => setShowLogin(false)}
         onLogin={handleLogin}
       />
 
-      {/* Admin Panel */}
       {showAdminPanel && (
         <AdminPanel
           isOpen={showAdminPanel}
