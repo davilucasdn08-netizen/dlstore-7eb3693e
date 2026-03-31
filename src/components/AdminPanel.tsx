@@ -3,15 +3,7 @@ import { X, LogOut, Plus, Trash2, BarChart3, Pencil, Check, XCircle, Link, Loade
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
-export interface Product {
-  id: string;
-  name: string;
-  imageUrl: string;
-  affiliateLink: string;
-  category: string;
-  price: string;
-  clicks: number;
-}
+import { type Product } from "@/pages/Index";
 
 interface AdminPanelProps {
   isOpen: boolean;
