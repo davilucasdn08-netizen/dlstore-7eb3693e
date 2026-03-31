@@ -1,8 +1,7 @@
-import { useState, useRef } from "react";
-import { X, LogOut, Plus, Trash2, BarChart3, Pencil, Check, XCircle, Link, Loader2, Zap } from "lucide-react";
+import { useState, useRef, useCallback } from "react";
+import { X, LogOut, Plus, Trash2, BarChart3, Pencil, Check, XCircle, Loader2, Zap, CheckCircle2, AlertCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-
 import { type Product } from "@/pages/Index";
 
 interface AdminPanelProps {
@@ -24,16 +23,30 @@ const CATEGORIES = [
 
 const inputClass = "w-full px-4 py-3 rounded-lg bg-secondary border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary";
 
+type BulkItem = {
+  url: string;
+  status: "pending" | "extracting" | "done" | "error";
+  name?: string;
+  imageUrl?: string;
+  price?: string;
+  category?: string;
+};
+
 const AdminPanel = ({ isOpen, onClose, products, onAddProduct, onEditProduct, onDeleteProduct, onLogout }: AdminPanelProps) => {
+  const [bulkLinks, setBulkLinks] = useState("");
+  const [bulkQueue, setBulkQueue] = useState<BulkItem[]>([]);
+  const [isBulkProcessing, setIsBulkProcessing] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Single product fields
   const [name, setName] = useState("");
   const [imageUrl, setImageUrl] = useState("");
   const [affiliateLink, setAffiliateLink] = useState("");
   const [category, setCategory] = useState("");
   const [price, setPrice] = useState("");
   const [isExtracting, setIsExtracting] = useState(false);
-  const [extracted, setExtracted] = useState(false);
-  const linkInputRef = useRef<HTMLInputElement>(null);
 
+  // Edit fields
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [editImageUrl, setEditImageUrl] = useState("");
@@ -41,48 +54,107 @@ const AdminPanel = ({ isOpen, onClose, products, onAddProduct, onEditProduct, on
   const [editCategory, setEditCategory] = useState("");
   const [editPrice, setEditPrice] = useState("");
 
-  const extractFromUrl = async (url: string) => {
-    if (!url.trim() || !url.startsWith("http")) return;
-    setIsExtracting(true);
-    setExtracted(false);
+  const extractSingle = async (url: string): Promise<Omit<BulkItem, "status"> | null> => {
     try {
-      const { data, error } = await supabase.functions.invoke('extract-product', {
+      const { data, error } = await supabase.functions.invoke("extract-product", {
         body: { url: url.trim() },
       });
-      if (error) {
-        toast.error("Erro ao extrair dados");
-        return;
-      }
-      if (data?.success && data.data) {
-        const d = data.data;
-        if (d.name) setName(d.name);
-        if (d.imageUrl) setImageUrl(d.imageUrl);
-        if (d.price) setPrice(d.price);
-        if (d.category) setCategory(d.category);
-        setAffiliateLink(url.trim());
-        setExtracted(true);
-        toast.success("Dados extraídos! Revise e clique Adicionar.");
-      } else {
-        setAffiliateLink(url.trim());
-        toast.info("Não extraiu tudo. Preencha o restante manualmente.");
-      }
+      if (error || !data?.success || !data.data) return null;
+      const d = data.data;
+      return {
+        url: url.trim(),
+        name: d.name || "",
+        imageUrl: d.imageUrl || "",
+        price: d.price || "",
+        category: d.category || "Eletrônicos e Informática",
+      };
     } catch {
-      toast.error("Erro de conexão");
-    } finally {
-      setIsExtracting(false);
+      return null;
     }
   };
 
-  const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+  const handleBulkProcess = useCallback(async () => {
+    const urls = bulkLinks
+      .split(/[\n,]+/)
+      .map((l) => l.trim())
+      .filter((l) => l.startsWith("http"));
+
+    if (urls.length === 0) {
+      toast.error("Cole pelo menos um link válido.");
+      return;
+    }
+
+    const queue: BulkItem[] = urls.map((url) => ({ url, status: "pending" as const }));
+    setBulkQueue(queue);
+    setIsBulkProcessing(true);
+    setBulkLinks("");
+
+    let added = 0;
+    let failed = 0;
+
+    // Process in parallel batches of 3
+    for (let i = 0; i < queue.length; i += 3) {
+      const batch = queue.slice(i, i + 3);
+      const promises = batch.map(async (item, batchIdx) => {
+        const idx = i + batchIdx;
+        setBulkQueue((prev) => prev.map((q, qi) => qi === idx ? { ...q, status: "extracting" } : q));
+
+        const result = await extractSingle(item.url);
+
+        if (result && result.name) {
+          onAddProduct({
+            name: result.name,
+            imageUrl: result.imageUrl || "/placeholder.svg",
+            affiliateLink: item.url,
+            category: result.category || "Eletrônicos e Informática",
+            price: result.price || "",
+          });
+          setBulkQueue((prev) =>
+            prev.map((q, qi) =>
+              qi === idx ? { ...q, status: "done", ...result } : q
+            )
+          );
+          added++;
+        } else {
+          setBulkQueue((prev) => prev.map((q, qi) => qi === idx ? { ...q, status: "error" } : q));
+          failed++;
+        }
+      });
+      await Promise.all(promises);
+    }
+
+    setIsBulkProcessing(false);
+    toast.success(`${added} produto(s) adicionado(s)${failed > 0 ? `, ${failed} falha(s)` : ""}!`);
+  }, [bulkLinks, onAddProduct]);
+
+  // Single link paste handler
+  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
     const pasted = e.clipboardData.getData("text");
-    if (pasted.startsWith("http")) {
+    const urls = pasted.split(/[\n,]+/).filter((l) => l.trim().startsWith("http"));
+    if (urls.length > 0) {
       e.preventDefault();
-      setAffiliateLink(pasted);
-      extractFromUrl(pasted);
+      setBulkLinks((prev) => (prev ? prev + "\n" : "") + urls.join("\n"));
     }
   };
 
-  const handleSubmit = () => {
+  // Single quick add
+  const handleSingleExtract = async () => {
+    if (!affiliateLink.trim().startsWith("http")) return;
+    setIsExtracting(true);
+    const result = await extractSingle(affiliateLink);
+    if (result) {
+      setName(result.name || "");
+      setImageUrl(result.imageUrl || "");
+      setPrice(result.price || "");
+      setCategory(result.category || "");
+      toast.success("Dados extraídos!");
+    } else {
+      toast.info("Não foi possível extrair. Preencha manualmente.");
+    }
+    setIsExtracting(false);
+  };
+
+  const handleSingleSubmit = () => {
     if (!name || !affiliateLink) {
       toast.error("Preencha pelo menos o nome e o link.");
       return;
@@ -94,22 +166,8 @@ const AdminPanel = ({ isOpen, onClose, products, onAddProduct, onEditProduct, on
       category: category || "Eletrônicos e Informática",
       price,
     });
-    // Reset all fields
-    setName("");
-    setImageUrl("");
-    setAffiliateLink("");
-    setCategory("");
-    setPrice("");
-    setExtracted(false);
+    setName(""); setImageUrl(""); setAffiliateLink(""); setCategory(""); setPrice("");
     toast.success("Produto adicionado!");
-    // Focus back on link input for rapid adding
-    setTimeout(() => linkInputRef.current?.focus(), 100);
-  };
-
-  const handleQuickAdd = () => {
-    if (extracted && name && affiliateLink) {
-      handleSubmit();
-    }
   };
 
   const startEdit = (product: Product) => {
@@ -124,15 +182,16 @@ const AdminPanel = ({ isOpen, onClose, products, onAddProduct, onEditProduct, on
   const cancelEdit = () => setEditingId(null);
 
   const saveEdit = () => {
-    if (!editingId || !editName || !editImageUrl || !editAffiliateLink || !editCategory) return;
+    if (!editingId || !editName || !editAffiliateLink) return;
     onEditProduct(editingId, {
       name: editName,
-      imageUrl: editImageUrl,
+      imageUrl: editImageUrl || "/placeholder.svg",
       affiliateLink: editAffiliateLink,
-      category: editCategory,
+      category: editCategory || "Eletrônicos e Informática",
       price: editPrice,
     });
     setEditingId(null);
+    toast.success("Produto atualizado!");
   };
 
   return (
@@ -149,80 +208,91 @@ const AdminPanel = ({ isOpen, onClose, products, onAddProduct, onEditProduct, on
           </button>
         </div>
 
-        {/* Quick Add - paste link to auto-fill */}
+        {/* Bulk Add */}
         <div className="mb-4 p-3 rounded-lg border border-primary/30 bg-primary/5">
           <label className="text-xs font-semibold uppercase tracking-wider text-primary flex items-center gap-1.5 mb-2">
-            <Zap size={13} /> Cole o link e adicione rápido
+            <Zap size={13} /> Cole vários links de uma vez
           </label>
-          <input
-            ref={linkInputRef}
-            type="url"
-            placeholder="Cole o link do produto aqui..."
-            value={affiliateLink}
-            onChange={(e) => setAffiliateLink(e.target.value)}
+          <textarea
+            ref={textareaRef}
+            placeholder={"Cole os links aqui (um por linha):\nhttps://produto1.com\nhttps://produto2.com\nhttps://produto3.com"}
+            value={bulkLinks}
+            onChange={(e) => setBulkLinks(e.target.value)}
             onPaste={handlePaste}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && affiliateLink.startsWith("http") && !isExtracting) {
-                if (extracted && name) handleQuickAdd();
-                else extractFromUrl(affiliateLink);
-              }
-            }}
-            className={`${inputClass} text-sm py-2.5`}
+            rows={4}
+            className={`${inputClass} text-sm py-2.5 resize-none`}
+            disabled={isBulkProcessing}
           />
-          {isExtracting && (
-            <div className="flex items-center gap-2 mt-2 text-xs text-primary">
-              <Loader2 size={12} className="animate-spin" /> Extraindo dados do produto...
-            </div>
-          )}
+          <button
+            onClick={handleBulkProcess}
+            disabled={isBulkProcessing || !bulkLinks.trim()}
+            className="w-full mt-2 py-2.5 rounded-lg gradient-primary text-primary-foreground font-semibold flex items-center justify-center gap-2 hover:opacity-90 transition-opacity text-sm disabled:opacity-50"
+          >
+            {isBulkProcessing ? (
+              <><Loader2 size={14} className="animate-spin" /> Processando...</>
+            ) : (
+              <><Zap size={14} /> Extrair e adicionar todos</>
+            )}
+          </button>
         </div>
 
-        {/* Preview extracted data */}
-        {(name || imageUrl) && (
-          <div className="mb-3 p-3 rounded-lg border border-border bg-secondary/30">
-            {imageUrl && (
-              <img src={imageUrl} alt="" className="w-full h-32 object-contain rounded mb-2 bg-white" />
-            )}
-            <div className="space-y-2">
-              <input type="text" placeholder="Nome do produto" value={name} onChange={(e) => setName(e.target.value)} className={`${inputClass} text-sm py-2`} />
-              <div className="flex gap-2">
-                <input type="text" placeholder="Preço" value={price} onChange={(e) => setPrice(e.target.value)} className={`${inputClass} text-sm py-2 w-1/3`} />
-                <select value={category} onChange={(e) => setCategory(e.target.value)} className={`${inputClass} text-sm py-2 appearance-none flex-1`}>
-                  <option value="" disabled>Categoria</option>
-                  {CATEGORIES.map((cat) => (<option key={cat} value={cat}>{cat}</option>))}
-                </select>
+        {/* Bulk Queue Status */}
+        {bulkQueue.length > 0 && (
+          <div className="mb-4 space-y-1.5">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+              Fila ({bulkQueue.filter((q) => q.status === "done").length}/{bulkQueue.length})
+            </h3>
+            {bulkQueue.map((item, i) => (
+              <div key={i} className="flex items-center gap-2 text-xs p-2 rounded-md bg-secondary/50">
+                {item.status === "pending" && <div className="w-3 h-3 rounded-full bg-muted-foreground/30" />}
+                {item.status === "extracting" && <Loader2 size={12} className="animate-spin text-primary" />}
+                {item.status === "done" && <CheckCircle2 size={12} className="text-primary" />}
+                {item.status === "error" && <AlertCircle size={12} className="text-destructive" />}
+                <span className="truncate flex-1 text-foreground">
+                  {item.name || item.url}
+                </span>
+                {item.category && (
+                  <span className="text-muted-foreground text-[10px] shrink-0">{item.category.split(" ")[0]}</span>
+                )}
               </div>
-              <input type="text" placeholder="URL da imagem" value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} className={`${inputClass} text-sm py-2 text-muted-foreground`} />
+            ))}
+            {!isBulkProcessing && (
               <button
-                onClick={handleSubmit}
-                className="w-full py-3 rounded-lg gradient-primary text-primary-foreground font-semibold flex items-center justify-center gap-2 hover:opacity-90 transition-opacity"
+                onClick={() => setBulkQueue([])}
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors mt-1"
               >
-                <Plus size={18} /> Adicionar produto
+                Limpar fila
               </button>
-            </div>
+            )}
           </div>
         )}
 
-        {/* Manual add fallback (shown when no extraction active) */}
-        {!name && !imageUrl && !isExtracting && (
-          <details className="mb-4">
-            <summary className="text-xs text-muted-foreground cursor-pointer hover:text-foreground transition-colors mb-2">
-              Adicionar manualmente
-            </summary>
-            <div className="space-y-3">
-              <input type="text" placeholder="Nome do produto" value={name} onChange={(e) => setName(e.target.value)} className={inputClass} />
-              <input type="text" placeholder="URL da imagem" value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} className={inputClass} />
-              <input type="text" placeholder="Link afiliado" value={affiliateLink} onChange={(e) => setAffiliateLink(e.target.value)} className={inputClass} />
-              <select value={category} onChange={(e) => setCategory(e.target.value)} className={`${inputClass} appearance-none`}>
-                <option value="" disabled>Selecione a categoria</option>
+        {/* Single add fallback */}
+        <details className="mb-4">
+          <summary className="text-xs text-muted-foreground cursor-pointer hover:text-foreground transition-colors mb-2">
+            Adicionar um produto manualmente
+          </summary>
+          <div className="space-y-3 p-3 rounded-lg border border-border bg-secondary/30">
+            <input type="url" placeholder="Link do produto" value={affiliateLink} onChange={(e) => setAffiliateLink(e.target.value)} className={`${inputClass} text-sm`} />
+            {affiliateLink.startsWith("http") && !name && (
+              <button onClick={handleSingleExtract} disabled={isExtracting} className="w-full py-2 rounded-lg bg-primary/10 text-primary text-sm font-medium flex items-center justify-center gap-1.5">
+                {isExtracting ? <><Loader2 size={12} className="animate-spin" /> Extraindo...</> : "Extrair dados do link"}
+              </button>
+            )}
+            <input type="text" placeholder="Nome do produto" value={name} onChange={(e) => setName(e.target.value)} className={`${inputClass} text-sm`} />
+            <div className="flex gap-2">
+              <input type="text" placeholder="Preço" value={price} onChange={(e) => setPrice(e.target.value)} className={`${inputClass} text-sm w-1/3`} />
+              <select value={category} onChange={(e) => setCategory(e.target.value)} className={`${inputClass} text-sm appearance-none flex-1`}>
+                <option value="" disabled>Categoria</option>
                 {CATEGORIES.map((cat) => (<option key={cat} value={cat}>{cat}</option>))}
               </select>
-              <input type="text" placeholder="Preço (ex: 99.90)" value={price} onChange={(e) => setPrice(e.target.value)} className={inputClass} />
-              <button onClick={handleSubmit} className="w-full py-3 rounded-lg gradient-primary text-primary-foreground font-semibold flex items-center justify-center gap-2 hover:opacity-90 transition-opacity">
-                <Plus size={18} /> Adicionar produto
-              </button>
             </div>
-          </details>
-        )}
+            <input type="text" placeholder="URL da imagem" value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} className={`${inputClass} text-sm`} />
+            <button onClick={handleSingleSubmit} className="w-full py-3 rounded-lg gradient-primary text-primary-foreground font-semibold flex items-center justify-center gap-2 hover:opacity-90 transition-opacity">
+              <Plus size={18} /> Adicionar produto
+            </button>
+          </div>
+        </details>
 
         {/* Product list */}
         <div>
