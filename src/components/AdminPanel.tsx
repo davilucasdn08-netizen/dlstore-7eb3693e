@@ -246,7 +246,7 @@ const AdminPanel = ({ isOpen, onClose, products, onAddProduct, onEditProduct, on
               <div key={i} className="flex items-center gap-2 text-xs p-2 rounded-md bg-secondary/50">
                 {item.status === "pending" && <div className="w-3 h-3 rounded-full bg-muted-foreground/30" />}
                 {item.status === "extracting" && <Loader2 size={12} className="animate-spin text-primary" />}
-                {item.status === "done" && <CheckCircle2 size={12} className="text-green-500" />}
+                {item.status === "done" && <CheckCircle2 size={12} className="text-primary" />}
                 {item.status === "error" && <AlertCircle size={12} className="text-destructive" />}
                 <span className="truncate flex-1 text-foreground">
                   {item.name || item.url}
