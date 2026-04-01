@@ -193,6 +193,7 @@ const AdminPanel = ({ isOpen, onClose, products, onAddProduct, onEditProduct, on
       affiliateLink: editAffiliateLink,
       category: editCategory || "Eletrônicos e Informática",
       price: editPrice,
+      rating: "",
     });
     setEditingId(null);
     toast.success("Produto atualizado!");
