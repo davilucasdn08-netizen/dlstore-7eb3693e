@@ -207,6 +207,7 @@ const Index = () => {
               affiliateLink={product.affiliateLink}
               category={product.category}
               price={product.price}
+              rating={product.rating}
               onClickTrack={() => handleClickTrack(product.id)}
             />
           ))}
