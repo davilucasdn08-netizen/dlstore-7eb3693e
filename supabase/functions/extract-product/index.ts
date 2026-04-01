@@ -264,10 +264,11 @@ Deno.serve(async (req) => {
     const imageUrl = extractImage(html);
     const price = extractPrice(html);
     const category = guessCategory(name, html);
+    const rating = extractRating(html);
 
     return new Response(JSON.stringify({
       success: true,
-      data: { name, imageUrl, price, category },
+      data: { name, imageUrl, price, category, rating },
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
