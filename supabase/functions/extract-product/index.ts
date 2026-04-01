@@ -83,6 +83,28 @@ function extractPrice(html: string): string {
   return "";
 }
 
+function extractRating(html: string): string {
+  // Amazon: "4,5 de 5 estrelas" or data attribute
+  const amazonRating = html.match(/class="a-icon-alt"[^>]*>([0-9.,]+)\s*(de|out of)\s*5/);
+  if (amazonRating?.[1]) return amazonRating[1].replace('.', ',');
+
+  // Structured data: aggregateRating
+  const jsonLdRating = html.match(/"ratingValue"\s*:\s*"?([0-9.,]+)"?/);
+  if (jsonLdRating?.[1]) {
+    const val = jsonLdRating[1].replace('.', ',');
+    return val;
+  }
+
+  // Meta tag
+  const metaRating = html.match(/itemprop="ratingValue"\s+content="([^"]+)"/);
+  if (metaRating?.[1]) return metaRating[1].replace('.', ',');
+
+  // Review count for context
+  const reviewCount = html.match(/"reviewCount"\s*:\s*"?(\d+)"?/);
+  
+  return "";
+}
+
 function extractTitle(html: string): string {
   const patterns = [
     /id="productTitle"[^>]*>\s*([^<]+)/,
@@ -241,10 +263,11 @@ Deno.serve(async (req) => {
     const imageUrl = extractImage(html);
     const price = extractPrice(html);
     const category = guessCategory(name, html);
+    const rating = extractRating(html);
 
     return new Response(JSON.stringify({
       success: true,
-      data: { name, imageUrl, price, category },
+      data: { name, imageUrl, price, category, rating },
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

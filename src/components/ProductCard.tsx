@@ -1,4 +1,4 @@
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, Star } from "lucide-react";
 
 interface ProductCardProps {
   name: string;
@@ -6,10 +6,11 @@ interface ProductCardProps {
   affiliateLink: string;
   category: string;
   price?: string;
+  rating?: string;
   onClickTrack: () => void;
 }
 
-const ProductCard = ({ name, imageUrl, affiliateLink, category, price, onClickTrack }: ProductCardProps) => {
+const ProductCard = ({ name, imageUrl, affiliateLink, category, price, rating, onClickTrack }: ProductCardProps) => {
   const handleBuy = () => {
     onClickTrack();
     window.open(affiliateLink, "_blank", "noopener,noreferrer");
@@ -30,6 +31,12 @@ const ProductCard = ({ name, imageUrl, affiliateLink, category, price, onClickTr
         <span className="inline-block text-xs px-3 py-1 rounded-full bg-category-badge/20 text-category-badge-foreground">
           {category}
         </span>
+        {rating && (
+          <div className="flex items-center gap-1">
+            <Star size={14} className="fill-yellow-400 text-yellow-400" />
+            <span className="text-sm font-medium text-foreground">{rating}</span>
+          </div>
+        )}
         {price && (
           <p className="text-lg font-bold text-primary">
             R$ {price}

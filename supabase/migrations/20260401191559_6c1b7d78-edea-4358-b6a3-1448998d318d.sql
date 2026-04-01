@@ -1,0 +1,1 @@
+ALTER TABLE public.products ADD COLUMN rating text NOT NULL DEFAULT '';

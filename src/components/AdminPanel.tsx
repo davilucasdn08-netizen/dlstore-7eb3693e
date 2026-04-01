@@ -30,6 +30,7 @@ type BulkItem = {
   imageUrl?: string;
   price?: string;
   category?: string;
+  rating?: string;
 };
 
 const AdminPanel = ({ isOpen, onClose, products, onAddProduct, onEditProduct, onDeleteProduct, onLogout }: AdminPanelProps) => {
@@ -67,6 +68,7 @@ const AdminPanel = ({ isOpen, onClose, products, onAddProduct, onEditProduct, on
         imageUrl: d.imageUrl || "",
         price: d.price || "",
         category: d.category || "Eletrônicos e Informática",
+        rating: d.rating || "",
       };
     } catch {
       return null;
@@ -108,6 +110,7 @@ const AdminPanel = ({ isOpen, onClose, products, onAddProduct, onEditProduct, on
             affiliateLink: item.url,
             category: result.category || "Eletrônicos e Informática",
             price: result.price || "",
+            rating: result.rating || "",
           });
           setBulkQueue((prev) =>
             prev.map((q, qi) =>
@@ -165,6 +168,7 @@ const AdminPanel = ({ isOpen, onClose, products, onAddProduct, onEditProduct, on
       affiliateLink,
       category: category || "Eletrônicos e Informática",
       price,
+      rating: "",
     });
     setName(""); setImageUrl(""); setAffiliateLink(""); setCategory(""); setPrice("");
     toast.success("Produto adicionado!");
@@ -189,6 +193,7 @@ const AdminPanel = ({ isOpen, onClose, products, onAddProduct, onEditProduct, on
       affiliateLink: editAffiliateLink,
       category: editCategory || "Eletrônicos e Informática",
       price: editPrice,
+      rating: "",
     });
     setEditingId(null);
     toast.success("Produto atualizado!");

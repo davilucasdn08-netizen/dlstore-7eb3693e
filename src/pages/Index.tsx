@@ -3,6 +3,7 @@ import { Search, Lock } from "lucide-react";
 import ProductCard from "@/components/ProductCard";
 import AdminPanel from "@/components/AdminPanel";
 import AdminLoginDialog from "@/components/AdminLoginDialog";
+import ContactSection from "@/components/ContactSection";
 import { supabase } from "@/integrations/supabase/client";
 
 export interface Product {
@@ -12,6 +13,7 @@ export interface Product {
   affiliateLink: string;
   category: string;
   price: string;
+  rating: string;
   clicks: number;
 }
 
@@ -55,6 +57,7 @@ const Index = () => {
           affiliateLink: p.affiliate_link,
           category: p.category,
           price: p.price,
+          rating: (p as any).rating || "",
           clicks: p.clicks,
         }))
       );
@@ -99,7 +102,8 @@ const Index = () => {
       affiliate_link: product.affiliateLink,
       category: product.category,
       price: product.price,
-    });
+      rating: product.rating || "",
+    } as any);
     // Refresh to get real ID, or rollback on error
     if (error) {
       setProducts((prev) => prev.filter((p) => p.id !== tempId));
@@ -204,6 +208,7 @@ const Index = () => {
               affiliateLink={product.affiliateLink}
               category={product.category}
               price={product.price}
+              rating={product.rating}
               onClickTrack={() => handleClickTrack(product.id)}
             />
           ))}
@@ -212,6 +217,8 @@ const Index = () => {
           <p className="text-center text-muted-foreground mt-16">Nenhum produto encontrado.</p>
         )}
       </main>
+
+      <ContactSection />
 
       <button
         onClick={() => (isAdmin ? setShowAdminPanel(!showAdminPanel) : setShowLogin(true))}
