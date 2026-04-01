@@ -57,6 +57,7 @@ const Index = () => {
           affiliateLink: p.affiliate_link,
           category: p.category,
           price: p.price,
+          rating: (p as any).rating || "",
           clicks: p.clicks,
         }))
       );
