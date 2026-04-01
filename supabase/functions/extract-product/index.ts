@@ -9,24 +9,72 @@ const BodySchema = z.object({
   url: z.string().url().max(2000),
 });
 
+function normalizeBRPrice(raw: string): string {
+  // Remove currency symbols and spaces
+  let p = raw.trim().replace(/[R$\s\u00a0]/g, '');
+  if (!p) return '';
+  
+  // Brazilian format: 1.299,00 → keep as-is for display
+  // If has both . and , → Brazilian format (1.299,00)
+  if (p.includes('.') && p.includes(',')) {
+    // Already Brazilian format like 1.299,00 - good
+    return p;
+  }
+  // If only comma with 2 decimals → Brazilian (299,00)
+  if (/,\d{2}$/.test(p) && !p.includes('.')) {
+    return p;
+  }
+  // If only dot with 2 decimals → convert to Brazilian (299.00 → 299,00)
+  if (/\.\d{2}$/.test(p) && !p.includes(',')) {
+    return p.replace('.', ',');
+  }
+  // Fallback
+  return p;
+}
+
 function extractPrice(html: string): string {
-  // Amazon price patterns
-  const patterns = [
-    /class="a-price-whole"[^>]*>([^<]+)</,
+  // Try structured data first (most reliable)
+  const jsonLdMatches = html.match(/"price"\s*:\s*"?(\d+[\.,]?\d*)"?/g);
+  if (jsonLdMatches) {
+    for (const m of jsonLdMatches) {
+      const val = m.match(/"price"\s*:\s*"?(\d+[\.,]?\d*)"?/);
+      if (val?.[1]) return normalizeBRPrice(val[1]);
+    }
+  }
+
+  // Amazon-specific: combine whole + fraction
+  const wholeMatch = html.match(/class="a-price-whole"[^>]*>([^<]+)</);
+  const fractionMatch = html.match(/class="a-price-fraction"[^>]*>([^<]+)</);
+  if (wholeMatch?.[1]) {
+    const whole = wholeMatch[1].trim().replace(/[^\d.]/g, '');
+    const fraction = fractionMatch?.[1]?.trim().replace(/[^\d]/g, '') || '00';
+    if (whole) return `${whole},${fraction}`;
+  }
+
+  // a-offscreen contains full price like "R$ 1.299,00"
+  const offscreen = html.match(/class="a-offscreen"[^>]*>([^<]+)</);
+  if (offscreen?.[1]) {
+    const p = normalizeBRPrice(offscreen[1]);
+    if (p) return p;
+  }
+
+  // Generic R$ pattern
+  const brPattern = html.match(/R\$\s*([\d.,]+)/);
+  if (brPattern?.[1]) {
+    return normalizeBRPrice(brPattern[1]);
+  }
+
+  // Fallback patterns
+  const fallbacks = [
     /id="priceblock_ourprice"[^>]*>([^<]+)</,
     /id="priceblock_dealprice"[^>]*>([^<]+)</,
-    /class="a-offscreen"[^>]*>([^<]+)</,
     /data-a-color="price"[^>]*>.*?<span[^>]*>([^<]+)</s,
-    /class="a-price"[^>]*>.*?<span[^>]*>([^<]+)</s,
-    /"price":\s*"?(\d+[\.,]\d{2})"?/,
-    /R\$\s*([\d.,]+)/,
   ];
-
-  for (const pattern of patterns) {
+  for (const pattern of fallbacks) {
     const match = html.match(pattern);
     if (match?.[1]) {
-      let price = match[1].trim().replace(/[^\d.,]/g, '');
-      if (price) return price;
+      const p = normalizeBRPrice(match[1]);
+      if (p) return p;
     }
   }
   return "";
