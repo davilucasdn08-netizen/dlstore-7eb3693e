@@ -218,8 +218,6 @@ const Index = () => {
       </main>
 
       <ContactSection />
-        )}
-      </main>
 
       <button
         onClick={() => (isAdmin ? setShowAdminPanel(!showAdminPanel) : setShowLogin(true))}
