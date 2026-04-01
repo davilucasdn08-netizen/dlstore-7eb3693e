@@ -1,4 +1,4 @@
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, Star } from "lucide-react";
 
 interface ProductCardProps {
   name: string;
@@ -6,6 +6,7 @@ interface ProductCardProps {
   affiliateLink: string;
   category: string;
   price?: string;
+  rating?: string;
   onClickTrack: () => void;
 }
 
