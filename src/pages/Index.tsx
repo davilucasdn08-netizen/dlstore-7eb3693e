@@ -12,6 +12,7 @@ export interface Product {
   affiliateLink: string;
   category: string;
   price: string;
+  rating: string;
   clicks: number;
 }
 
