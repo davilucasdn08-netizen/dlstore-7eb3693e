@@ -240,7 +240,7 @@ Deno.serve(async (req) => {
     const name = extractTitle(html);
     const imageUrl = extractImage(html);
     const price = extractPrice(html);
-    const category = guessCategory(name);
+    const category = guessCategory(name, html);
 
     return new Response(JSON.stringify({
       success: true,
