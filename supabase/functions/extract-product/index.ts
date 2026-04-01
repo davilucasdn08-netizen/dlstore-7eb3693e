@@ -10,39 +10,40 @@ const BodySchema = z.object({
 });
 
 function normalizeBRPrice(raw: string): string {
-  // Remove currency symbols and spaces
   let p = raw.trim().replace(/[R$\s\u00a0]/g, '');
   if (!p) return '';
   
-  // Brazilian format: 1.299,00 → keep as-is for display
-  // If has both . and , → Brazilian format (1.299,00)
-  if (p.includes('.') && p.includes(',')) {
-    // Already Brazilian format like 1.299,00 - good
-    return p;
-  }
-  // If only comma with 2 decimals → Brazilian (299,00)
-  if (/,\d{2}$/.test(p) && !p.includes('.')) {
-    return p;
-  }
-  // If only dot with 2 decimals → convert to Brazilian (299.00 → 299,00)
+  // Already Brazilian format: 1.299,00
+  if (p.includes('.') && p.includes(',')) return p;
+  // Only comma with 2 decimals: 299,00
+  if (/,\d{2}$/.test(p) && !p.includes('.')) return p;
+  // Only dot with 2 decimals: 299.00 → 299,00
   if (/\.\d{2}$/.test(p) && !p.includes(',')) {
+    // Check if dot is thousands separator (1.299) vs decimal (29.99)
+    const parts = p.split('.');
+    if (parts[0].length > 3) {
+      // e.g. 1299.99 → 1.299,99
+      const num = parseFloat(p);
+      return num.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
     return p.replace('.', ',');
   }
-  // Fallback
+  // Pure integer like 1299 → 1.299,00
+  if (/^\d+$/.test(p) && p.length > 0) {
+    const num = parseInt(p);
+    return num.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
   return p;
 }
 
 function extractPrice(html: string): string {
-  // Try structured data first (most reliable)
-  const jsonLdMatches = html.match(/"price"\s*:\s*"?(\d+[\.,]?\d*)"?/g);
-  if (jsonLdMatches) {
-    for (const m of jsonLdMatches) {
-      const val = m.match(/"price"\s*:\s*"?(\d+[\.,]?\d*)"?/);
-      if (val?.[1]) return normalizeBRPrice(val[1]);
-    }
+  // Try structured data first (most reliable) - look for full price with cents
+  const jsonLdPriceWithCents = html.match(/"price"\s*:\s*"?(\d+\.\d{1,2})"?/);
+  if (jsonLdPriceWithCents?.[1]) {
+    return normalizeBRPrice(jsonLdPriceWithCents[1]);
   }
 
-  // Amazon-specific: combine whole + fraction
+  // Amazon-specific: combine whole + fraction (most accurate for Amazon)
   const wholeMatch = html.match(/class="a-price-whole"[^>]*>([^<]+)</);
   const fractionMatch = html.match(/class="a-price-fraction"[^>]*>([^<]+)</);
   if (wholeMatch?.[1]) {
@@ -58,11 +59,13 @@ function extractPrice(html: string): string {
     if (p) return p;
   }
 
-  // Generic R$ pattern
-  const brPattern = html.match(/R\$\s*([\d.,]+)/);
-  if (brPattern?.[1]) {
-    return normalizeBRPrice(brPattern[1]);
-  }
+  // Generic R$ pattern with cents
+  const brFull = html.match(/R\$\s*([\d.]+,\d{2})/);
+  if (brFull?.[1]) return normalizeBRPrice(brFull[1]);
+
+  // R$ without comma
+  const brSimple = html.match(/R\$\s*([\d.,]+)/);
+  if (brSimple?.[1]) return normalizeBRPrice(brSimple[1]);
 
   // Fallback patterns
   const fallbacks = [
@@ -84,16 +87,15 @@ function extractTitle(html: string): string {
   const patterns = [
     /id="productTitle"[^>]*>\s*([^<]+)/,
     /id="title"[^>]*>\s*([^<]+)/,
-    /<title[^>]*>([^<]+)</,
     /property="og:title"\s+content="([^"]+)"/,
     /name="title"\s+content="([^"]+)"/,
+    /<title[^>]*>([^<]+)</,
   ];
 
   for (const pattern of patterns) {
     const match = html.match(pattern);
     if (match?.[1]) {
       let title = match[1].trim();
-      // Clean Amazon title suffixes
       title = title.replace(/\s*[-|]\s*Amazon.*$/i, '').trim();
       if (title.length > 2) return title;
     }
@@ -120,17 +122,83 @@ function extractImage(html: string): string {
   return "";
 }
 
-function guessCategory(title: string): string {
+function guessCategory(title: string, html: string): string {
   const lower = title.toLowerCase();
+  
+  // Try to extract category from the page itself first
+  // Amazon breadcrumbs
+  const breadcrumb = html.match(/class="a-link-normal a-color-tertiary"[^>]*>\s*([^<]+)/);
+  const amazonCat = breadcrumb?.[1]?.trim().toLowerCase() || '';
+  
+  // Amazon department / category node
+  const department = html.match(/id="nav-subnav"[^>]*data-category="([^"]+)"/);
+  const deptVal = department?.[1]?.toLowerCase() || '';
+  
+  // Structured data category
+  const schemaCat = html.match(/"category"\s*:\s*"([^"]+)"/);
+  const schemaVal = schemaCat?.[1]?.toLowerCase() || '';
+
+  const allContext = `${lower} ${amazonCat} ${deptVal} ${schemaVal}`;
+
   const categories: Record<string, string[]> = {
-    "Eletrônicos e Informática": ["notebook", "celular", "fone", "mouse", "teclado", "monitor", "tablet", "câmera", "caixa de som", "carregador", "cabo", "usb", "bluetooth", "smart", "echo", "alexa", "kindle", "tv", "computador", "pc", "ssd", "hd", "memória", "placa", "processador", "headset", "speaker", "phone", "laptop", "watch", "relógio digital", "wireless", "wi-fi"],
-    "Moda e Acessórios": ["camisa", "camiseta", "calça", "vestido", "saia", "blusa", "jaqueta", "tênis", "sapato", "bota", "sandália", "bolsa", "mochila", "carteira", "óculos", "relógio", "anel", "brinco", "colar", "pulseira", "roupa", "moda", "chapéu", "boné"],
-    "Casa e Decoração": ["sofá", "mesa", "cadeira", "cama", "travesseiro", "lençol", "cortina", "tapete", "luminária", "vaso", "panela", "frigideira", "liquidificador", "microondas", "geladeira", "fogão", "aspirador", "organizador", "prateleira", "estante"],
-    "Beleza e Cuidados Pessoais": ["shampoo", "condicionador", "creme", "perfume", "maquiagem", "batom", "base", "protetor solar", "desodorante", "escova", "secador", "prancha", "hidratante", "sabonete", "esmalte"],
+    "Eletrônicos e Informática": [
+      "notebook", "celular", "fone", "mouse", "teclado", "monitor", "tablet",
+      "câmera", "camera", "caixa de som", "carregador", "cabo", "usb", "bluetooth",
+      "smart", "echo", "alexa", "kindle", "tv", "televisão", "televisao",
+      "computador", "pc", "ssd", "hd", "memória", "memoria", "placa", "processador",
+      "headset", "speaker", "phone", "laptop", "wireless", "wi-fi", "wifi",
+      "eletrônico", "eletronico", "electronics", "computers", "informática", "informatica",
+      "impressora", "printer", "pendrive", "pen drive", "roteador", "router",
+      "console", "playstation", "xbox", "nintendo", "gaming", "gamer",
+      "drone", "gopro", "webcam", "microfone", "microphone", "caixa amplificada",
+      "controle", "controller", "joystick", "placa de vídeo", "gpu", "cpu",
+      "fonte", "gabinete", "cooler", "ventilador pc", "adaptador", "hub",
+    ],
+    "Moda e Acessórios": [
+      "camisa", "camiseta", "calça", "calca", "vestido", "saia", "blusa",
+      "jaqueta", "tênis", "tenis", "sapato", "bota", "sandália", "sandalia",
+      "bolsa", "mochila", "carteira", "óculos", "oculos", "relógio", "relogio",
+      "anel", "brinco", "colar", "pulseira", "roupa", "moda", "chapéu", "chapeu",
+      "boné", "bone", "fashion", "clothing", "shoes", "jewelry",
+      "bermuda", "short", "moletom", "suéter", "sueter", "casaco", "blazer",
+      "chinelo", "sapatilha", "peep toe", "scarpin", "slip on", "sneaker",
+      "cinto", "gravata", "lenço", "lenco", "cachecol", "luva", "meias", "meia",
+      "lingerie", "cueca", "sutiã", "sutia", "pijama", "biquíni", "biquini",
+      "maiô", "maio", "regata", "polo", "social",
+    ],
+    "Casa e Decoração": [
+      "sofá", "sofa", "mesa", "cadeira", "cama", "travesseiro", "lençol", "lencol",
+      "cortina", "tapete", "luminária", "luminaria", "vaso", "panela", "frigideira",
+      "liquidificador", "microondas", "geladeira", "fogão", "fogao", "aspirador",
+      "organizador", "prateleira", "estante", "home", "kitchen", "furniture",
+      "colchão", "colchao", "edredom", "cobertor", "toalha", "almofada",
+      "abajur", "espelho", "quadro", "porta-retrato", "relógio de parede",
+      "cafeteira", "torradeira", "batedeira", "mixer", "air fryer", "airfryer",
+      "fritadeira", "forno", "grill", "churrasqueira", "espremedor",
+      "ferro de passar", "máquina de lavar", "secadora", "lava-louça",
+      "ventilador", "ar condicionado", "aquecedor", "umidificador",
+      "vassoura", "rodo", "balde", "lixeira", "pano", "detergente",
+      "jogo de cama", "jogo americano", "aparelho de jantar", "talheres",
+      "copo", "xícara", "prato", "jarra", "garrafa térmica",
+    ],
+    "Beleza e Cuidados Pessoais": [
+      "shampoo", "condicionador", "creme", "perfume", "maquiagem", "batom",
+      "base", "protetor solar", "desodorante", "escova de cabelo", "secador",
+      "prancha", "hidratante", "sabonete", "esmalte", "beauty", "cosmetics",
+      "skincare", "skin care", "máscara", "mascara", "rímel", "rimel",
+      "corretivo", "pó compacto", "blush", "iluminador", "contorno",
+      "demaquilante", "tônico", "tonico", "sérum", "serum", "ácido",
+      "proteção solar", "fps", "colônia", "colonia", "eau de toilette",
+      "body splash", "loção", "locao", "óleo corporal", "oleo corporal",
+      "depilador", "barbeador", "aparelho de barbear", "gillette",
+      "escova dental", "pasta de dente", "fio dental", "enxaguante",
+      "cabelo", "hair", "tintura", "coloração", "coloracao",
+      "chapinha", "babyliss", "modelador", "difusor",
+    ],
   };
 
   for (const [cat, keywords] of Object.entries(categories)) {
-    if (keywords.some(k => lower.includes(k))) return cat;
+    if (keywords.some(k => allContext.includes(k))) return cat;
   }
   return "Eletrônicos e Informática";
 }
@@ -172,7 +240,7 @@ Deno.serve(async (req) => {
     const name = extractTitle(html);
     const imageUrl = extractImage(html);
     const price = extractPrice(html);
-    const category = guessCategory(name);
+    const category = guessCategory(name, html);
 
     return new Response(JSON.stringify({
       success: true,
