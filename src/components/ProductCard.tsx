@@ -32,7 +32,7 @@ const ProductCard = ({ name, imageUrl, affiliateLink, category, price, onClickTr
         </span>
         {price && (
           <p className="text-lg font-bold text-primary">
-            R$ {parseFloat(price).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+            R$ {price}
           </p>
         )}
         <button
