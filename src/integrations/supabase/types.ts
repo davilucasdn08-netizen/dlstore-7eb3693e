@@ -24,6 +24,7 @@ export type Database = {
           image_url: string
           name: string
           price: string
+          rating: string
         }
         Insert: {
           affiliate_link: string
@@ -34,6 +35,7 @@ export type Database = {
           image_url?: string
           name: string
           price?: string
+          rating?: string
         }
         Update: {
           affiliate_link?: string
@@ -44,6 +46,7 @@ export type Database = {
           image_url?: string
           name?: string
           price?: string
+          rating?: string
         }
         Relationships: []
       }
