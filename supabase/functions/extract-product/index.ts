@@ -9,26 +9,103 @@ const BodySchema = z.object({
   url: z.string().url().max(2000),
 });
 
+const USER_AGENTS = [
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 14.5; rv:127.0) Gecko/20100101 Firefox/127.0',
+];
+
+function isCaptchaOrBlocked(html: string): boolean {
+  const lower = html.toLowerCase();
+  return (
+    lower.includes('captcha') ||
+    lower.includes('robot') ||
+    lower.includes('automated access') ||
+    lower.includes('api-services-support@amazon') ||
+    lower.includes('type the characters you see') ||
+    (lower.includes('sorry') && lower.includes('not a robot')) ||
+    (html.length < 5000 && !lower.includes('productTitle') && !lower.includes('og:title'))
+  );
+}
+
+async function fetchWithRetry(url: string, maxRetries = 3): Promise<string> {
+  let lastError: Error | null = null;
+
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    const ua = USER_AGENTS[attempt % USER_AGENTS.length];
+    
+    try {
+      const response = await fetch(url, {
+        headers: {
+          'User-Agent': ua,
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+          'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
+          'Accept-Encoding': 'gzip, deflate, br',
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache',
+          'Sec-Ch-Ua': '"Chromium";v="126", "Google Chrome";v="126", "Not-A.Brand";v="8"',
+          'Sec-Ch-Ua-Mobile': '?0',
+          'Sec-Ch-Ua-Platform': '"Windows"',
+          'Sec-Fetch-Dest': 'document',
+          'Sec-Fetch-Mode': 'navigate',
+          'Sec-Fetch-Site': 'none',
+          'Sec-Fetch-User': '?1',
+          'Upgrade-Insecure-Requests': '1',
+        },
+        redirect: 'follow',
+      });
+
+      if (!response.ok) {
+        lastError = new Error(`HTTP ${response.status}`);
+        await response.text(); // consume body
+        if (attempt < maxRetries - 1) {
+          await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+          continue;
+        }
+        break;
+      }
+
+      const html = await response.text();
+
+      if (isCaptchaOrBlocked(html)) {
+        console.log(`Attempt ${attempt + 1}: CAPTCHA/block detected, retrying...`);
+        lastError = new Error('CAPTCHA detected');
+        if (attempt < maxRetries - 1) {
+          await new Promise(r => setTimeout(r, 1500 * (attempt + 1)));
+          continue;
+        }
+        // On last attempt, return whatever we got
+        return html;
+      }
+
+      return html;
+    } catch (e) {
+      lastError = e instanceof Error ? e : new Error(String(e));
+      if (attempt < maxRetries - 1) {
+        await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+      }
+    }
+  }
+
+  throw lastError || new Error('Failed after retries');
+}
+
 function normalizeBRPrice(raw: string): string {
   let p = raw.trim().replace(/[R$\s\u00a0]/g, '');
   if (!p) return '';
   
-  // Already Brazilian format: 1.299,00
   if (p.includes('.') && p.includes(',')) return p;
-  // Only comma with 2 decimals: 299,00
   if (/,\d{2}$/.test(p) && !p.includes('.')) return p;
-  // Only dot with 2 decimals: 299.00 → 299,00
   if (/\.\d{2}$/.test(p) && !p.includes(',')) {
-    // Check if dot is thousands separator (1.299) vs decimal (29.99)
     const parts = p.split('.');
     if (parts[0].length > 3) {
-      // e.g. 1299.99 → 1.299,99
       const num = parseFloat(p);
       return num.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
     return p.replace('.', ',');
   }
-  // Pure integer like 1299 → 1.299,00
   if (/^\d+$/.test(p) && p.length > 0) {
     const num = parseInt(p);
     return num.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -37,13 +114,7 @@ function normalizeBRPrice(raw: string): string {
 }
 
 function extractPrice(html: string): string {
-  // Try structured data first (most reliable) - look for full price with cents
-  const jsonLdPriceWithCents = html.match(/"price"\s*:\s*"?(\d+\.\d{1,2})"?/);
-  if (jsonLdPriceWithCents?.[1]) {
-    return normalizeBRPrice(jsonLdPriceWithCents[1]);
-  }
-
-  // Amazon-specific: combine whole + fraction (most accurate for Amazon)
+  // Amazon-specific: combine whole + fraction (most accurate)
   const wholeMatch = html.match(/class="a-price-whole"[^>]*>([^<]+)</);
   const fractionMatch = html.match(/class="a-price-fraction"[^>]*>([^<]+)</);
   if (wholeMatch?.[1]) {
@@ -57,6 +128,12 @@ function extractPrice(html: string): string {
   if (offscreen?.[1]) {
     const p = normalizeBRPrice(offscreen[1]);
     if (p) return p;
+  }
+
+  // Try structured data - look for price with cents
+  const jsonLdPrice = html.match(/"price"\s*:\s*"?(\d+[\d.,]*\d*)"?/);
+  if (jsonLdPrice?.[1]) {
+    return normalizeBRPrice(jsonLdPrice[1]);
   }
 
   // Generic R$ pattern with cents
@@ -84,24 +161,15 @@ function extractPrice(html: string): string {
 }
 
 function extractRating(html: string): string {
-  // Amazon: "4,5 de 5 estrelas" or data attribute
   const amazonRating = html.match(/class="a-icon-alt"[^>]*>([0-9.,]+)\s*(de|out of)\s*5/);
   if (amazonRating?.[1]) return amazonRating[1].replace('.', ',');
 
-  // Structured data: aggregateRating
   const jsonLdRating = html.match(/"ratingValue"\s*:\s*"?([0-9.,]+)"?/);
-  if (jsonLdRating?.[1]) {
-    const val = jsonLdRating[1].replace('.', ',');
-    return val;
-  }
+  if (jsonLdRating?.[1]) return jsonLdRating[1].replace('.', ',');
 
-  // Meta tag
   const metaRating = html.match(/itemprop="ratingValue"\s+content="([^"]+)"/);
   if (metaRating?.[1]) return metaRating[1].replace('.', ',');
 
-  // Review count for context
-  const reviewCount = html.match(/"reviewCount"\s*:\s*"?(\d+)"?/);
-  
   return "";
 }
 
@@ -110,6 +178,7 @@ function extractTitle(html: string): string {
     /id="productTitle"[^>]*>\s*([^<]+)/,
     /id="title"[^>]*>\s*([^<]+)/,
     /property="og:title"\s+content="([^"]+)"/,
+    /name="og:title"\s+content="([^"]+)"/,
     /name="title"\s+content="([^"]+)"/,
     /<title[^>]*>([^<]+)</,
   ];
@@ -119,7 +188,8 @@ function extractTitle(html: string): string {
     if (match?.[1]) {
       let title = match[1].trim();
       title = title.replace(/\s*[-|]\s*Amazon.*$/i, '').trim();
-      if (title.length > 2) return title;
+      // Skip if title is just the domain name
+      if (title.length > 2 && !title.match(/^(amazon\.com|amazon\.com\.br|www\.)$/i)) return title;
     }
   }
   return "";
@@ -130,9 +200,10 @@ function extractImage(html: string): string {
     /id="landingImage"[^>]*src="([^"]+)"/,
     /id="imgBlkFront"[^>]*src="([^"]+)"/,
     /data-old-hires="([^"]+)"/,
+    /"hiRes"\s*:\s*"([^"]+)"/,
+    /"large"\s*:\s*"([^"]+)"/,
     /property="og:image"\s+content="([^"]+)"/,
-    /"hiRes":"([^"]+)"/,
-    /"large":"([^"]+)"/,
+    /name="og:image"\s+content="([^"]+)"/,
   ];
 
   for (const pattern of patterns) {
@@ -147,16 +218,12 @@ function extractImage(html: string): string {
 function guessCategory(title: string, html: string): string {
   const lower = title.toLowerCase();
   
-  // Try to extract category from the page itself first
-  // Amazon breadcrumbs
   const breadcrumb = html.match(/class="a-link-normal a-color-tertiary"[^>]*>\s*([^<]+)/);
   const amazonCat = breadcrumb?.[1]?.trim().toLowerCase() || '';
   
-  // Amazon department / category node
   const department = html.match(/id="nav-subnav"[^>]*data-category="([^"]+)"/);
   const deptVal = department?.[1]?.toLowerCase() || '';
   
-  // Structured data category
   const schemaCat = html.match(/"category"\s*:\s*"([^"]+)"/);
   const schemaVal = schemaCat?.[1]?.toLowerCase() || '';
 
@@ -202,6 +269,9 @@ function guessCategory(title: string, html: string): string {
       "vassoura", "rodo", "balde", "lixeira", "pano", "detergente",
       "jogo de cama", "jogo americano", "aparelho de jantar", "talheres",
       "copo", "xícara", "prato", "jarra", "garrafa térmica",
+      "cesto", "organizador", "rattan", "multiuso",
+      "tábua", "tabua", "cuscuzeira", "porta tempero", "porta-tempero",
+      "tempero", "condimento",
     ],
     "Beleza e Cuidados Pessoais": [
       "shampoo", "condicionador", "creme", "perfume", "maquiagem", "batom",
@@ -216,6 +286,8 @@ function guessCategory(title: string, html: string): string {
       "escova dental", "pasta de dente", "fio dental", "enxaguante",
       "cabelo", "hair", "tintura", "coloração", "coloracao",
       "chapinha", "babyliss", "modelador", "difusor",
+      "gloss", "labial", "lápis", "lip", "kiko", "natura", "boticário",
+      "boticario", "malbec", "kaiak", "egeo", "nautica", "fralda", "pampers",
     ],
   };
 
@@ -242,28 +314,34 @@ Deno.serve(async (req) => {
 
     const { url } = parsed.data;
 
-    const response = await fetch(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
-      },
-    });
-
-    if (!response.ok) {
-      return new Response(JSON.stringify({ error: `Não foi possível acessar o link (${response.status})` }), {
+    let html: string;
+    try {
+      html = await fetchWithRetry(url);
+    } catch (e) {
+      console.error('Fetch failed after retries:', e);
+      return new Response(JSON.stringify({ error: 'Não foi possível acessar o link após várias tentativas' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
-
-    const html = await response.text();
 
     const name = extractTitle(html);
     const imageUrl = extractImage(html);
     const price = extractPrice(html);
     const category = guessCategory(name, html);
     const rating = extractRating(html);
+
+    // If we couldn't extract a name, the page was likely blocked
+    if (!name) {
+      console.error('Could not extract product name. HTML length:', html.length);
+      return new Response(JSON.stringify({ 
+        error: 'Não foi possível extrair os dados. O site pode ter bloqueado o acesso.',
+        success: false,
+      }), {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
 
     return new Response(JSON.stringify({
       success: true,

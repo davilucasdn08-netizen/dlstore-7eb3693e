@@ -60,7 +60,7 @@ const AdminPanel = ({ isOpen, onClose, products, onAddProduct, onEditProduct, on
       const { data, error } = await supabase.functions.invoke("extract-product", {
         body: { url: url.trim() },
       });
-      if (error || !data?.success || !data.data) return null;
+      if (error || !data?.success || !data.data || !data.data.name) return null;
       const d = data.data;
       return {
         url: url.trim(),
