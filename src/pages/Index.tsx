@@ -4,8 +4,6 @@ import ProductCard from "@/components/ProductCard";
 import AdminPanel from "@/components/AdminPanel";
 import AdminLoginDialog from "@/components/AdminLoginDialog";
 import ContactSection from "@/components/ContactSection";
-import CategoryMenu from "@/components/CategoryMenu";
-import { PRIMARY_CATEGORIES } from "@/lib/categories";
 import { supabase } from "@/integrations/supabase/client";
 
 export interface Product {
@@ -28,6 +26,14 @@ async function hashCode(code: string): Promise<string> {
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
 }
+
+const CATEGORIES = [
+  "Todos",
+  "Moda e Acessórios",
+  "Eletrônicos e Informática",
+  "Casa e Decoração",
+  "Beleza e Cuidados Pessoais",
+];
 
 const Index = () => {
   const [products, setProducts] = useState<Product[]>([]);
@@ -61,11 +67,19 @@ const Index = () => {
 
   useEffect(() => {
     fetchProducts();
+
     const channel = supabase
       .channel("products-realtime")
-      .on("postgres_changes", { event: "*", schema: "public", table: "products" }, () => fetchProducts())
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "products" },
+        () => fetchProducts()
+      )
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [fetchProducts]);
 
   const filteredProducts = useMemo(() => {
@@ -89,32 +103,51 @@ const Index = () => {
     const tempId = crypto.randomUUID();
     const optimistic: Product = { ...product, id: tempId, clicks: 0 };
     setProducts((prev) => [optimistic, ...prev]);
+
     try {
       await adminAction("insert", {
-        name: product.name, image_url: product.imageUrl,
-        affiliate_link: product.affiliateLink, category: product.category,
-        price: product.price, rating: product.rating || "",
+        name: product.name,
+        image_url: product.imageUrl,
+        affiliate_link: product.affiliateLink,
+        category: product.category,
+        price: product.price,
+        rating: product.rating || "",
       });
       fetchProducts();
-    } catch { setProducts((prev) => prev.filter((p) => p.id !== tempId)); }
+    } catch {
+      setProducts((prev) => prev.filter((p) => p.id !== tempId));
+    }
   };
 
   const handleEditProduct = async (id: string, updated: Omit<Product, "id" | "clicks">) => {
     try {
       await adminAction("update", {
-        id, name: updated.name, image_url: updated.imageUrl,
-        affiliate_link: updated.affiliateLink, category: updated.category, price: updated.price,
+        id,
+        name: updated.name,
+        image_url: updated.imageUrl,
+        affiliate_link: updated.affiliateLink,
+        category: updated.category,
+        price: updated.price,
       });
       fetchProducts();
-    } catch { /* silent */ }
+    } catch {
+      // silent
+    }
   };
 
   const handleDeleteProduct = async (id: string) => {
-    try { await adminAction("delete", { id }); fetchProducts(); } catch { /* silent */ }
+    try {
+      await adminAction("delete", { id });
+      fetchProducts();
+    } catch {
+      // silent
+    }
   };
 
   const handleClickTrack = async (id: string) => {
-    setProducts((prev) => prev.map((p) => (p.id === id ? { ...p, clicks: p.clicks + 1 } : p)));
+    setProducts((prev) =>
+      prev.map((p) => (p.id === id ? { ...p, clicks: p.clicks + 1 } : p))
+    );
     await supabase.rpc("increment_product_clicks" as any, { product_id: id });
   };
 
@@ -122,7 +155,9 @@ const Index = () => {
     const hash = await hashCode(code);
     if (hash === ADMIN_HASH) {
       adminCodeRef.current = code;
-      setIsAdmin(true); setShowLogin(false); setShowAdminPanel(true);
+      setIsAdmin(true);
+      setShowLogin(false);
+      setShowAdminPanel(true);
       return true;
     }
     return false;
@@ -130,76 +165,50 @@ const Index = () => {
 
   const handleLogout = () => {
     adminCodeRef.current = "";
-    setIsAdmin(false); setShowAdminPanel(false);
+    setIsAdmin(false);
+    setShowAdminPanel(false);
   };
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Sticky header */}
-      <header className="sticky top-0 z-40 bg-background/95 backdrop-blur-md border-b border-border">
-        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
-          <h1 className="text-2xl md:text-3xl font-black tracking-tight shrink-0" translate="no">
-            <span className="text-gradient-primary">DL</span>
-            <span className="text-foreground">STORE</span>
-          </h1>
+      <header className="pt-10 pb-6 text-center">
+        <h1 className="text-5xl md:text-6xl font-black tracking-tight">
+          <span className="text-gradient-primary">DL</span>
+          <span className="text-foreground">STORE</span>
+        </h1>
+        <p className="text-muted-foreground mt-2 text-sm">Os melhores produtos selecionados para você</p>
+      </header>
 
-          <div className="relative flex-1 max-w-md">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <input
-              type="text"
-              placeholder="Buscar produtos..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 rounded-lg bg-secondary border border-border text-foreground text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-            />
-          </div>
-
-          <CategoryMenu activeCategory={activeCategory} onSelectCategory={setActiveCategory} />
+      <div className="max-w-xl mx-auto px-4 mb-6">
+        <div className="relative">
+          <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <input
+            type="text"
+            placeholder="Buscar produtos..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full pl-12 pr-4 py-3 rounded-xl bg-secondary border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+          />
         </div>
+      </div>
 
-        {/* Quick-filter chips */}
-        <div className="max-w-6xl mx-auto px-4 pb-3 flex gap-2 overflow-x-auto scrollbar-hide">
+      <div className="flex flex-wrap justify-center gap-2 px-4 mb-10">
+        {CATEGORIES.map((cat) => (
           <button
-            onClick={() => setActiveCategory("Todos")}
-            className={`px-4 py-1.5 rounded-full text-xs font-medium transition-all whitespace-nowrap shrink-0 ${
-              activeCategory === "Todos"
+            key={cat}
+            onClick={() => setActiveCategory(cat)}
+            className={`px-5 py-2 rounded-full text-sm font-medium transition-all ${
+              activeCategory === cat
                 ? "gradient-primary text-primary-foreground"
                 : "bg-secondary text-secondary-foreground border border-border hover:border-primary/40"
             }`}
           >
-            Todos
+            {cat}
           </button>
-          {PRIMARY_CATEGORIES.map((cat) => (
-            <button
-              key={cat}
-              onClick={() => setActiveCategory(cat)}
-              className={`px-4 py-1.5 rounded-full text-xs font-medium transition-all whitespace-nowrap shrink-0 ${
-                activeCategory === cat
-                  ? "gradient-primary text-primary-foreground"
-                  : "bg-secondary text-secondary-foreground border border-border hover:border-primary/40"
-              }`}
-            >
-              {cat}
-            </button>
-          ))}
-        </div>
-      </header>
+        ))}
+      </div>
 
-      {/* Active category indicator when not "Todos" */}
-      {activeCategory !== "Todos" && (
-        <div className="max-w-6xl mx-auto px-4 pt-4 pb-2 flex items-center gap-2">
-          <span className="text-sm text-muted-foreground">Categoria:</span>
-          <span className="text-sm font-semibold text-foreground">{activeCategory}</span>
-          <button
-            onClick={() => setActiveCategory("Todos")}
-            className="ml-1 text-xs text-primary hover:underline"
-          >
-            Limpar
-          </button>
-        </div>
-      )}
-
-      <main className="max-w-6xl mx-auto px-4 py-6 pb-20">
+      <main className="max-w-6xl mx-auto px-4 pb-20">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {filteredProducts.map((product) => (
             <ProductCard
@@ -228,13 +237,20 @@ const Index = () => {
         <Lock size={22} />
       </button>
 
-      <AdminLoginDialog isOpen={showLogin} onClose={() => setShowLogin(false)} onLogin={handleLogin} />
+      <AdminLoginDialog
+        isOpen={showLogin}
+        onClose={() => setShowLogin(false)}
+        onLogin={handleLogin}
+      />
 
       {showAdminPanel && (
         <AdminPanel
-          isOpen={showAdminPanel} onClose={() => setShowAdminPanel(false)}
-          products={products} onAddProduct={handleAddProduct}
-          onEditProduct={handleEditProduct} onDeleteProduct={handleDeleteProduct}
+          isOpen={showAdminPanel}
+          onClose={() => setShowAdminPanel(false)}
+          products={products}
+          onAddProduct={handleAddProduct}
+          onEditProduct={handleEditProduct}
+          onDeleteProduct={handleDeleteProduct}
           onLogout={handleLogout}
         />
       )}
