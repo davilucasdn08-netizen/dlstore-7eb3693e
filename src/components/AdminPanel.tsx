@@ -14,12 +14,7 @@ interface AdminPanelProps {
   onLogout: () => void;
 }
 
-const CATEGORIES = [
-  "Moda e Acessórios",
-  "Eletrônicos e Informática",
-  "Casa e Decoração",
-  "Beleza e Cuidados Pessoais",
-];
+import { CATEGORIES } from "@/lib/categories";
 
 const inputClass = "w-full px-4 py-3 rounded-lg bg-secondary border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary";
 
