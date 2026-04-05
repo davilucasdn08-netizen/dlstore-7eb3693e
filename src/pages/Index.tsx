@@ -209,9 +209,6 @@ const Index = () => {
               <span className="text-gradient-primary">DL</span>
               <span className="text-foreground">STORE</span>
             </h1>
-            <Link to="/sobre" className="text-[11px] sm:text-sm font-medium text-muted-foreground hover:text-foreground transition-colors shrink-0">
-              Conheça a marca
-            </Link>
           </div>
 
           {/* Search bar: hidden on mobile (shown in row below), visible on sm+ */}
@@ -353,25 +350,34 @@ const Index = () => {
               A curadoria mais inteligente da internet. Filtramos as maiores tendências globais para entregar as ofertas mais exclusivas, com autoridade e qualidade premium.
             </p>
 
-            <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto animate-in slide-in-from-bottom-6 duration-1000 px-2">
-               <button 
-                 onClick={() => {
-                   setActiveCategory("Todos");
-                   window.scrollTo({ top: 0, behavior: 'smooth' });
-                 }}
-                 className="flex h-12 sm:h-14 items-center justify-center gap-2 px-6 sm:px-8 rounded-full gradient-primary text-primary-foreground font-bold text-base sm:text-lg hover:scale-105 transition-transform shadow-lg shadow-primary/25"
+            <div className="flex flex-col items-center animate-in slide-in-from-bottom-6 duration-1000 px-2 w-full sm:w-auto">
+               <Link 
+                 to="/sobre" 
+                 className="group mb-8 flex items-center gap-2 px-6 py-2.5 rounded-full bg-card/40 backdrop-blur-md border border-primary/20 text-primary hover:bg-primary hover:text-primary-foreground hover:scale-105 transition-all duration-300 font-bold text-sm sm:text-base shadow-lg shadow-primary/5 hover:shadow-primary/20"
                >
-                 Explorar <ArrowRight size={20} />
-               </button>
-               {!user && (
-                 <LoginModal>
-                   <button 
-                      className="flex h-12 sm:h-14 items-center justify-center gap-2 px-6 sm:px-8 rounded-full bg-secondary text-secondary-foreground font-bold text-base sm:text-lg hover:bg-secondary/80 border border-border transition-colors w-full sm:w-auto"
-                   >
-                     Fazer Login
-                   </button>
-                 </LoginModal>
-               )}
+                 Conheça a marca <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
+               </Link>
+
+               <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+                  <button 
+                    onClick={() => {
+                      setActiveCategory("Todos");
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }}
+                    className="flex h-12 sm:h-14 items-center justify-center gap-2 px-6 sm:px-8 rounded-full gradient-primary text-primary-foreground font-bold text-base sm:text-lg hover:scale-105 transition-transform shadow-lg shadow-primary/25"
+                  >
+                    Explorar <ArrowRight size={20} />
+                  </button>
+                  {!user && (
+                    <LoginModal>
+                      <button 
+                         className="flex h-12 sm:h-14 items-center justify-center gap-2 px-6 sm:px-8 rounded-full bg-secondary text-secondary-foreground font-bold text-base sm:text-lg hover:bg-secondary/80 border border-border transition-colors w-full sm:w-auto"
+                      >
+                        Fazer Login
+                      </button>
+                    </LoginModal>
+                  )}
+               </div>
             </div>
 
             {/* Features Row */}
