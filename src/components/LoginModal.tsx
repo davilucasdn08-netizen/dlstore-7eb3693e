@@ -23,7 +23,7 @@ export function LoginModal({ children }: { children: React.ReactNode }) {
           email,
           password,
           options: {
-            emailRedirectTo: window.location.origin,
+            emailRedirectTo: import.meta.env.VITE_SITE_URL || window.location.origin,
           }
         });
         if (error) throw error;
