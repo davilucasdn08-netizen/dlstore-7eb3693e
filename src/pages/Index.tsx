@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
-import { Search, Lock, User, ArrowRight, Zap, TrendingUp, ShieldCheck, MessageCircle } from "lucide-react";
+import { Search, Lock, User, ArrowRight, Zap, TrendingUp, ShieldCheck } from "lucide-react";
 import { Link } from "react-router-dom";
 import ProductCard from "@/components/ProductCard";
 import AdminPanel from "@/components/AdminPanel";
