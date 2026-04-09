@@ -78,6 +78,7 @@ export function LoginModal({ children }: { children: React.ReactNode }) {
       toast.success("Bem-vindo(a) de volta!");
       setIsOpen(false);
       resetForm();
+      navigate("/");
     } catch (err: any) {
       toast.error(err.message || "Erro ao fazer login.");
     } finally {
@@ -183,7 +184,7 @@ export function LoginModal({ children }: { children: React.ReactNode }) {
                     autoComplete="email"
                   />
                 </div>
-                <PasswordInput value={password} onChange={setPassword} placeholder="Sua senha" />
+                <PasswordField value={password} onChange={setPassword} placeholder="Sua senha" showPassword={showPassword} onToggle={() => setShowPassword(!showPassword)} />
               </div>
 
               <div className="text-right">
@@ -225,8 +226,8 @@ export function LoginModal({ children }: { children: React.ReactNode }) {
                     autoComplete="email"
                   />
                 </div>
-                <PasswordInput value={password} onChange={setPassword} placeholder="Crie uma senha (mín. 6 caracteres)" />
-                <PasswordInput value={confirmPassword} onChange={setConfirmPassword} placeholder="Confirme sua senha" />
+                <PasswordField value={password} onChange={setPassword} placeholder="Crie uma senha (mín. 6 caracteres)" showPassword={showPassword} onToggle={() => setShowPassword(!showPassword)} />
+                <PasswordField value={confirmPassword} onChange={setConfirmPassword} placeholder="Confirme sua senha" showPassword={showPassword} onToggle={() => setShowPassword(!showPassword)} />
               </div>
 
               <Button type="submit" className="w-full gradient-primary font-semibold h-11" disabled={loading}>
