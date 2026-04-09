@@ -140,7 +140,7 @@ export function LoginModal({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // PasswordInput references moved to top-level PasswordField component
+  
 
   return (
     <Dialog open={isOpen} onOpenChange={(o) => { setIsOpen(o); if (!o) resetForm(); }}>
