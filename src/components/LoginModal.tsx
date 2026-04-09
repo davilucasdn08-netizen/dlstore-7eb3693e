@@ -5,10 +5,44 @@ import { Input } from "./ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Loader2, Eye, EyeOff, Mail, Lock, UserPlus, LogIn, ArrowLeft } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 type AuthView = "login" | "register" | "forgot";
 
+function PasswordField({ value, onChange, placeholder, showPassword, onToggle }: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder: string;
+  showPassword: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <div className="relative">
+      <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+      <Input
+        type={showPassword ? "text" : "password"}
+        placeholder={placeholder}
+        required
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="bg-background pl-10 pr-10"
+        minLength={6}
+        autoComplete="current-password"
+      />
+      <button
+        type="button"
+        onClick={onToggle}
+        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+        tabIndex={-1}
+      >
+        {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+      </button>
+    </div>
+  );
+}
+
 export function LoginModal({ children }: { children: React.ReactNode }) {
+  const navigate = useNavigate();
   const [isOpen, setIsOpen] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -44,6 +78,7 @@ export function LoginModal({ children }: { children: React.ReactNode }) {
       toast.success("Bem-vindo(a) de volta!");
       setIsOpen(false);
       resetForm();
+      navigate("/");
     } catch (err: any) {
       toast.error(err.message || "Erro ao fazer login.");
     } finally {
@@ -105,28 +140,7 @@ export function LoginModal({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const PasswordInput = ({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder: string }) => (
-    <div className="relative">
-      <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-      <Input
-        type={showPassword ? "text" : "password"}
-        placeholder={placeholder}
-        required
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="bg-background pl-10 pr-10"
-        minLength={6}
-      />
-      <button
-        type="button"
-        onClick={() => setShowPassword(!showPassword)}
-        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-        tabIndex={-1}
-      >
-        {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-      </button>
-    </div>
-  );
+  
 
   return (
     <Dialog open={isOpen} onOpenChange={(o) => { setIsOpen(o); if (!o) resetForm(); }}>
@@ -170,7 +184,7 @@ export function LoginModal({ children }: { children: React.ReactNode }) {
                     autoComplete="email"
                   />
                 </div>
-                <PasswordInput value={password} onChange={setPassword} placeholder="Sua senha" />
+                <PasswordField value={password} onChange={setPassword} placeholder="Sua senha" showPassword={showPassword} onToggle={() => setShowPassword(!showPassword)} />
               </div>
 
               <div className="text-right">
@@ -212,8 +226,8 @@ export function LoginModal({ children }: { children: React.ReactNode }) {
                     autoComplete="email"
                   />
                 </div>
-                <PasswordInput value={password} onChange={setPassword} placeholder="Crie uma senha (mín. 6 caracteres)" />
-                <PasswordInput value={confirmPassword} onChange={setConfirmPassword} placeholder="Confirme sua senha" />
+                <PasswordField value={password} onChange={setPassword} placeholder="Crie uma senha (mín. 6 caracteres)" showPassword={showPassword} onToggle={() => setShowPassword(!showPassword)} />
+                <PasswordField value={confirmPassword} onChange={setConfirmPassword} placeholder="Confirme sua senha" showPassword={showPassword} onToggle={() => setShowPassword(!showPassword)} />
               </div>
 
               <Button type="submit" className="w-full gradient-primary font-semibold h-11" disabled={loading}>
