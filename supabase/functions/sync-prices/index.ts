@@ -200,7 +200,7 @@ Deno.serve(async (req) => {
         results.skipped++;
       }
 
-      await sleep(1200);
+      await sleep(800);
     }
 
     const hasMore = products.length === BATCH_SIZE;
