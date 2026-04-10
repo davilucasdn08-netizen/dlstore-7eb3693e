@@ -10,16 +10,25 @@ interface AdminLoginDialogProps {
 const AdminLoginDialog = ({ isOpen, onClose, onLogin }: AdminLoginDialogProps) => {
   const [code, setCode] = useState("");
   const [error, setError] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   if (!isOpen) return null;
 
   const handleSubmit = async () => {
-    const success = await onLogin(code);
-    if (!success) {
-      setError(true);
-      setTimeout(() => setError(false), 2000);
+    if (!code.trim() || loading) return;
+    setLoading(true);
+    setError(false);
+    try {
+      const success = await onLogin(code);
+      if (!success) {
+        setError(true);
+        setTimeout(() => setError(false), 2000);
+      } else {
+        setCode("");
+      }
+    } finally {
+      setLoading(false);
     }
-    setCode("");
   };
 
   return (
@@ -47,15 +56,18 @@ const AdminLoginDialog = ({ isOpen, onClose, onLogin }: AdminLoginDialogProps) =
             value={code}
             onChange={(e) => setCode(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
+            disabled={loading}
             className={`w-full px-4 py-3 rounded-lg bg-secondary border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary ${
-              error ? "border-destructive" : "border-destructive/50"
+              error ? "border-destructive" : "border-border"
             }`}
+            autoFocus
           />
           <button
             onClick={handleSubmit}
-            className="w-full py-3 rounded-lg gradient-primary text-primary-foreground font-semibold hover:opacity-90 transition-opacity"
+            disabled={loading || !code.trim()}
+            className="w-full py-3 rounded-lg gradient-primary text-primary-foreground font-semibold hover:opacity-90 transition-opacity disabled:opacity-50"
           >
-            Entrar
+            {loading ? "Verificando..." : "Entrar"}
           </button>
         </div>
       </div>
